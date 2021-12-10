@@ -1,15 +1,14 @@
-FROM node:17
+FROM node:17-buster
 # Create app directory
 WORKDIR /usr/src/app
 
 # Install app dependencies
 COPY package*.json ./
-COPY yarn.lock ./
 
-RUN yarn install --frozen-lockfile
+RUN npm ci
 
 COPY . .
 
-RUN yarn build
+RUN npm run build
 
-CMD [ "yarn", "start" ]
+CMD [ "npm", "run", "start" ]

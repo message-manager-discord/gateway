@@ -11,7 +11,7 @@
     "build": "tsc"
   },
   "dependencies": {
-    "redis-discord-cache": "git+https://github.com/message-manager-discord/redis-discord-cache.git"
+    "redis-discord-cache": "github:message-manager-discord/redis-discord-cache"
   },
   "devDependencies": {
     "typescript": "^4.5.2"
