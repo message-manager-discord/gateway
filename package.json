@@ -1,0 +1,19 @@
+{
+  "name": "message-manager-gateway",
+  "version": "1.0.0-alpha",
+  "description": "Gateway client for the message manager bot",
+  "repository": "https://github.com/message-manager-discord/gateway",
+  "author": "Sam <anothercat1259@gmail.com>",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "node .",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "redis-discord-cache": "git+https://github.com/message-manager-discord/redis-discord-cache.git"
+  },
+  "devDependencies": {
+    "typescript": "^4.5.2"
+  }
+}
