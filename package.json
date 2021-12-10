@@ -11,7 +11,8 @@
     "build": "tsc"
   },
   "dependencies": {
-    "redis-discord-cache": "github:message-manager-discord/redis-discord-cache"
+    "redis-discord-cache": "github:message-manager-discord/redis-discord-cache",
+    "winston": "^3.3.3"
   },
   "devDependencies": {
     "typescript": "^4.5.2"
