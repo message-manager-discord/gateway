@@ -11,6 +11,8 @@
     "build": "tsc"
   },
   "dependencies": {
+    "fastify": "^3.27.1",
+    "prom-client": "^14.0.1",
     "redis-discord-cache": "github:message-manager-discord/redis-discord-cache",
     "winston": "^3.3.3"
   },
