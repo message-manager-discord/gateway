@@ -102,11 +102,9 @@ async function startShards(token: string) {
     await shard.connect();
     shards.push(shard);
     //TODO wait for ratelimiting
-    console.log(shard);
   }
 }
 startShards(TOKEN);
-console.log(shards);
 
 // Fetch guild count from client every 15 seconds and update metric gauge
 setInterval(async () => {
@@ -131,10 +129,9 @@ if (METRICS_PORT) {
     "/metrics",
     {
       preHandler: async (request, reply) => {
-        console.log(request.headers);
         if (
           request.headers.authorization?.replace(/BEARER\s*/i, "") !==
-            METRICS_AUTH
+          METRICS_AUTH
         ) {
           reply.code(401).send("Unauthorized");
         }
