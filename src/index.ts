@@ -2,6 +2,7 @@ import { GatewayClient } from "redis-discord-cache";
 import winston, { loggers } from "winston";
 import promClient from "prom-client";
 import fastify from "fastify";
+import * as Sentry from "@sentry/node";
 
 const HOST = process.env.REDIS_HOST;
 const PORT_string = process.env.REDIS_PORT;
@@ -32,20 +33,26 @@ if (!LOGGING_LEVEL) {
   LOGGING_LEVEL = "info";
 }
 
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+});
+
 // Logger
 
 const logger = winston.createLogger({
   level: LOGGING_LEVEL,
   transports: [
-    new winston.transports.File({
-      filename: "logs/test.log",
+    new winston.transports.Console({
       format: winston.format.simple(),
       handleExceptions: true,
-      level: LOGGING_LEVEL,
     }),
   ],
   exitOnError: false,
 });
+
+const handlePacketError = (error: unknown) => {
+  Sentry.captureException(error);
+};
 
 // Metrics
 
@@ -98,6 +105,7 @@ async function startShards(token: string) {
         onGatewayEvent: handleGatewayEvent,
         onRedisCommand: handleRedisCommand,
       },
+      onErrorInPacketHandler: handlePacketError,
     });
     await shard.connect();
     shards.push(shard);
