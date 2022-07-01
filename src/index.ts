@@ -115,7 +115,7 @@ async function startShards(token: string) {
 startShards(TOKEN);
 
 // Fetch guild count from client every 15 seconds and update metric gauge
-setInterval(async () => {
+const every15Seconds = async () => {
   // Check if client is connected and guild loaded (mostly)
   let guildCount = 0;
   shards.forEach(async (shard) => {
@@ -125,7 +125,13 @@ setInterval(async () => {
 
   guildsGauge.set(guildCount);
   // TODO Prevent this from being 0 on startup (some kind of tracking state and guild counts to get when all guilds loaded )
-}, 15 * 1000);
+
+  // Then call this function again in 15 seconds
+  setTimeout(every15Seconds, 15 * 1000);
+};
+
+// First run of the function
+every15Seconds();
 
 if (METRICS_PORT) {
   // If metrics port is defined create metrics server
