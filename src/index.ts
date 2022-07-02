@@ -8,6 +8,7 @@ const HOST = process.env.REDIS_HOST;
 const PORT_string = process.env.REDIS_PORT;
 const TOKEN = process.env.DISCORD_TOKEN;
 const METRICS_PORT_string = process.env.METRICS_PORT;
+const METRICS_HOST = process.env.METRICS_HOST;
 const METRICS_AUTH = process.env.METRICS_AUTH;
 
 if (!PORT_string || !TOKEN) {
@@ -27,6 +28,7 @@ try {
 } catch (e) {
   METRICS_PORT = undefined;
 }
+
 let LOGGING_LEVEL = process.env.LOGGING_LEVEL;
 
 if (!LOGGING_LEVEL) {
@@ -133,7 +135,7 @@ const every15Seconds = async () => {
 // First run of the function
 every15Seconds();
 
-if (METRICS_PORT) {
+if (METRICS_PORT && METRICS_HOST) {
   // If metrics port is defined create metrics server
 
   // Create web server for metrics endpoint
@@ -164,4 +166,13 @@ if (METRICS_PORT) {
   // Start metrics server
   logger.info(`Starting metrics server on port ${METRICS_PORT}`);
   metricsServer.listen(METRICS_PORT);
+  metricsServer.listen(METRICS_PORT, METRICS_HOST, function (err, address) {
+    // Seems to by typed incorrectly
+    // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
+    if (err) {
+      console.error(err);
+      process.exit(1);
+    }
+    logger.info(`Server is now listening on ${address}`);
+  });
 }
