@@ -1,6 +1,6 @@
 {
   "name": "message-manager-gateway",
-  "version": "1.0.0-alpha",
+  "version": "2.0.0",
   "description": "Gateway client for the message manager bot",
   "repository": "https://github.com/message-manager-discord/gateway",
   "author": "Sam <anothercat1259@gmail.com>",
