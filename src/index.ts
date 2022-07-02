@@ -155,6 +155,11 @@ if (METRICS_PORT) {
       reply.type("text/plain").send(await promClient.register.metrics());
     }
   );
+  metricsServer.addHook("onRequest", async (request, reply) => {
+    logger.debug(
+      `Received http request with method :${request.method} and path: ${request.url}`
+    );
+  });
 
   // Start metrics server
   logger.info(`Starting metrics server on port ${METRICS_PORT}`);
