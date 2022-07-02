@@ -157,6 +157,6 @@ if (METRICS_PORT) {
   );
 
   // Start metrics server
-  logger.info("Starting metrics server");
+  logger.info(`Starting metrics server on port ${METRICS_PORT}`);
   metricsServer.listen(METRICS_PORT);
 }
