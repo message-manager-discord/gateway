@@ -1,3 +1,4 @@
+// Runs gateway cache libary - and adds metrics
 import { GatewayClient } from "redis-discord-cache";
 import winston, { loggers } from "winston";
 import promClient from "prom-client";
@@ -35,12 +36,12 @@ if (!LOGGING_LEVEL) {
   LOGGING_LEVEL = "info";
 }
 
+// Start sentry logging service
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
 });
 
-// Logger
-
+// Custom local Logger
 const logger = winston.createLogger({
   level: LOGGING_LEVEL,
   transports: [
@@ -52,6 +53,7 @@ const logger = winston.createLogger({
   exitOnError: false,
 });
 
+// Capture any errors that happen when processing the packets (by the lib) and send to sentry
 const handlePacketError = (error: unknown) => {
   Sentry.captureException(error);
 };
@@ -86,10 +88,12 @@ const handleRedisCommand = async ({ name }: { name: string }) => {
   redisCommandsCounter.inc({ name });
 };
 
-const shardCount = 1; // TODO ADD INPUT
-const shardWaitConnect = 30; // TODO FIGURE OUT HOW TO WORK THIS OUT
+// Sharding settings
+const shardCount = 1;
+const shardWaitConnect = 30;
 const shards: GatewayClient[] = [];
 
+// Spin up shards - at the moment this is just one shard
 async function startShards(token: string) {
   for (let shardId = 0; shardId < shardCount; shardId++) {
     const shard = new GatewayClient({
@@ -111,14 +115,13 @@ async function startShards(token: string) {
     });
     await shard.connect();
     shards.push(shard);
-    //TODO wait for ratelimiting
   }
 }
-startShards(TOKEN);
+startShards(TOKEN); // Start the shards with the bot's token
 
 // Fetch guild count from client every 15 seconds and update metric gauge
 const every15Seconds = async () => {
-  // Check if client is connected and guild loaded (mostly)
+  // Check if client is connected and guild loaded
   let guildCount = 0;
   shards.forEach(async (shard) => {
     const shardGuildCount = await shard.getGuildCount();
