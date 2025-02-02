@@ -89,7 +89,7 @@ const handleRedisCommand = async ({ name }: { name: string }) => {
 };
 
 // Sharding settings
-const shardCount = 1;
+const shardCount = 2;
 const shardWaitConnect = 30;
 const shards: GatewayClient[] = [];
 
