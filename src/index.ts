@@ -1,9 +1,9 @@
 // Runs gateway cache libary - and adds metrics
-import { GatewayClient } from "redis-discord-cache";
-import winston, { loggers } from "winston";
-import promClient from "prom-client";
-import fastify from "fastify";
 import * as Sentry from "@sentry/node";
+import fastify from "fastify";
+import promClient from "prom-client";
+import { GatewayClient } from "redis-discord-cache";
+import winston from "winston";
 
 const HOST = process.env.REDIS_HOST;
 const PORT_string = process.env.REDIS_PORT;
@@ -158,11 +158,11 @@ if (METRICS_PORT && METRICS_HOST) {
     },
     async (request, reply) => {
       reply.type("text/plain").send(await promClient.register.metrics());
-    }
+    },
   );
   metricsServer.addHook("onRequest", async (request, reply) => {
     logger.debug(
-      `Received http request with method :${request.method} and path: ${request.url}`
+      `Received http request with method :${request.method} and path: ${request.url}`,
     );
   });
 
@@ -171,7 +171,7 @@ if (METRICS_PORT && METRICS_HOST) {
   metricsServer.listen(METRICS_PORT);
   metricsServer.listen(METRICS_PORT, METRICS_HOST, function (err, address) {
     // Seems to by typed incorrectly
-    // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
+
     if (err) {
       console.error(err);
       process.exit(1);
