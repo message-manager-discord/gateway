@@ -82,7 +82,9 @@ const handlePacketError = (error: unknown) => {
   Sentry.captureException(error);
 };
 
-const handleGatewayEvent = ({ name }: { name: string }) => {
+const handleGatewayEvent = ({ name }: { name: string | null }) => {
+  if (name === null) return;
+
   eventsCounter.inc({ name });
 };
 
