@@ -1,49 +1,47 @@
-// Runs gateway cache libary - and adds metrics
-import { GatewayClient } from "redis-discord-cache";
-import winston, { loggers } from "winston";
-import promClient from "prom-client";
-import fastify from "fastify";
+// Runs gateway cache library - and adds metrics
 import * as Sentry from "@sentry/node";
+import fastify from "fastify";
+import promClient from "prom-client";
+import { GatewayClient } from "redis-discord-cache";
+import winston from "winston";
+
+/* -------------------------
+   Environment
+-------------------------- */
 
 const HOST = process.env.REDIS_HOST;
-const PORT_string = process.env.REDIS_PORT;
+const PORT_STRING = process.env.REDIS_PORT;
 const TOKEN = process.env.DISCORD_TOKEN;
-const METRICS_PORT_string = process.env.METRICS_PORT;
+
+const METRICS_PORT_STRING = process.env.METRICS_PORT;
 const METRICS_HOST = process.env.METRICS_HOST;
 const METRICS_AUTH = process.env.METRICS_AUTH;
 
-if (!PORT_string || !TOKEN) {
+if (!PORT_STRING || !TOKEN) {
   throw new Error("Missing environment variables");
 }
-let PORT: number;
-try {
-  PORT = parseInt(PORT_string);
-} catch (e) {
-  throw new Error("Port must be a valid number");
-}
-let METRICS_PORT: number | undefined;
-try {
-  METRICS_PORT = METRICS_PORT_string
-    ? parseInt(METRICS_PORT_string)
-    : undefined;
-} catch (e) {
-  METRICS_PORT = undefined;
+
+const PORT = Number(PORT_STRING);
+if (Number.isNaN(PORT)) {
+  throw new Error("REDIS_PORT must be a valid number");
 }
 
-let LOGGING_LEVEL = process.env.LOGGING_LEVEL;
+const METRICS_PORT = METRICS_PORT_STRING
+  ? Number(METRICS_PORT_STRING)
+  : undefined;
 
-if (!LOGGING_LEVEL) {
-  LOGGING_LEVEL = "info";
+if (METRICS_PORT_STRING && Number.isNaN(METRICS_PORT)) {
+  throw new Error("METRICS_PORT must be a valid number");
 }
 
-// Start sentry logging service
-Sentry.init({
-  dsn: process.env.SENTRY_DSN,
-});
+/* -------------------------
+   Sentry + Logger
+-------------------------- */
 
-// Custom local Logger
+Sentry.init({ dsn: process.env.SENTRY_DSN });
+
 const logger = winston.createLogger({
-  level: LOGGING_LEVEL,
+  level: process.env.LOGGING_LEVEL ?? "info",
   transports: [
     new winston.transports.Console({
       format: winston.format.simple(),
@@ -53,56 +51,62 @@ const logger = winston.createLogger({
   exitOnError: false,
 });
 
-// Capture any errors that happen when processing the packets (by the lib) and send to sentry
-const handlePacketError = (error: unknown) => {
-  Sentry.captureException(error);
-};
-
-// Metrics
+/* -------------------------
+   Metrics
+-------------------------- */
 
 const metricsPrefix = "discord_gateway_";
-// Gauge for the number of guilds
+
 const guildsGauge = new promClient.Gauge({
   name: `${metricsPrefix}guild_count`,
   help: "Number of guilds",
 });
-// Counter for the number of gateway events
+
 const eventsCounter = new promClient.Counter({
   name: `${metricsPrefix}gateway_events_count`,
   help: "Number of gateway events",
   labelNames: ["name"],
 });
-// Counter for the number of redis commands
+
 const redisCommandsCounter = new promClient.Counter({
   name: `${metricsPrefix}redis_commands_count`,
   help: "Number of redis commands",
   labelNames: ["name"],
 });
 
-// Handler for gateway events - metrics
-const handleGatewayEvent = async ({ name }: { name: string }) => {
+/* -------------------------
+   Handlers
+-------------------------- */
+
+const handlePacketError = (error: unknown) => {
+  Sentry.captureException(error);
+};
+
+const handleGatewayEvent = ({ name }: { name: string | null }) => {
+  if (name === null) return;
+
   eventsCounter.inc({ name });
 };
-// Handler for redis commands - metrics
-const handleRedisCommand = async ({ name }: { name: string }) => {
+
+const handleRedisCommand = ({ name }: { name: string }) => {
   redisCommandsCounter.inc({ name });
 };
 
-// Sharding settings
-const shardCount = 2;
-const shardWaitConnect = 30;
-const shards: GatewayClient[] = [];
+/* -------------------------
+   Shards
+-------------------------- */
 
-// Spin up shards - at the moment this is just one shard
+const shardCount = 2;
+
 async function startShards(token: string) {
+  const shards: GatewayClient[] = [];
+
   for (let shardId = 0; shardId < shardCount; shardId++) {
     const shard = new GatewayClient({
       redis: { host: HOST, port: PORT },
       discord: {
         token,
-        presence: {
-          status: "online",
-        },
+        presence: { status: "online" },
         shardCount,
         shardId,
       },
@@ -113,69 +117,96 @@ async function startShards(token: string) {
       },
       onErrorInPacketHandler: handlePacketError,
     });
+
     await shard.connect();
     shards.push(shard);
   }
+
+  return shards;
 }
-startShards(TOKEN); // Start the shards with the bot's token
 
-// Fetch guild count from client every 15 seconds and update metric gauge
-const every15Seconds = async () => {
-  // Check if client is connected and guild loaded
-  let guildCount = 0;
-  shards.forEach(async (shard) => {
-    const shardGuildCount = await shard.getGuildCount();
-    guildCount += shardGuildCount;
-  });
+/* -------------------------
+   Metrics loop
+-------------------------- */
 
-  guildsGauge.set(guildCount);
-  // TODO Prevent this from being 0 on startup (some kind of tracking state and guild counts to get when all guilds loaded )
+function startMetricsLoop(shards: GatewayClient[]) {
+  const update = async () => {
+    const counts = await Promise.all(shards.map((s) => s.getGuildCount()));
 
-  // Then call this function again in 15 seconds
-  setTimeout(every15Seconds, 15 * 1000);
-};
+    const total = counts.reduce((a, b) => a + b, 0);
+    guildsGauge.set(total);
+  };
 
-// First run of the function
-every15Seconds();
+  void update();
 
-if (METRICS_PORT && METRICS_HOST) {
-  // If metrics port is defined create metrics server
+  const interval = setInterval(() => {
+    void update();
+  }, 15_000);
 
-  // Create web server for metrics endpoint
-  const metricsServer = fastify();
-  // Add metrics endpoint - authorization header must match METRICS_AUTH env variable
-  metricsServer.get(
+  return () => clearInterval(interval);
+}
+
+/* -------------------------
+   Metrics server
+-------------------------- */
+
+async function startMetricsServer() {
+  if (!METRICS_PORT || !METRICS_HOST) return;
+
+  const app = fastify();
+
+  app.get(
     "/metrics",
     {
-      preHandler: async (request, reply) => {
-        if (
-          request.headers.authorization?.replace(/BEARER\s*/i, "") !==
-          METRICS_AUTH
-        ) {
-          reply.code(401).send("Unauthorized");
+      preHandler: async (req, reply) => {
+        const auth = req.headers.authorization?.replace(/BEARER\s*/i, "");
+
+        if (auth !== METRICS_AUTH) {
+          return reply.code(401).send("Unauthorized");
         }
       },
     },
-    async (request, reply) => {
-      reply.type("text/plain").send(await promClient.register.metrics());
-    }
+    async (_req, reply) => {
+      return reply.type("text/plain").send(await promClient.register.metrics());
+    },
   );
-  metricsServer.addHook("onRequest", async (request, reply) => {
-    logger.debug(
-      `Received http request with method :${request.method} and path: ${request.url}`
-    );
+
+  app.addHook("onRequest", async (req) => {
+    logger.debug(`HTTP ${req.method} ${req.url}`);
   });
 
-  // Start metrics server
-  logger.info(`Starting metrics server on port ${METRICS_PORT}`);
-  metricsServer.listen(METRICS_PORT);
-  metricsServer.listen(METRICS_PORT, METRICS_HOST, function (err, address) {
-    // Seems to by typed incorrectly
-    // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
-    if (err) {
-      console.error(err);
-      process.exit(1);
-    }
-    logger.info(`Server is now listening on ${address}`);
-  });
+  try {
+    const address = await app.listen({
+      port: METRICS_PORT,
+      host: METRICS_HOST,
+    });
+
+    logger.info(`Metrics server listening on ${address}`);
+  } catch (err) {
+    logger.error("Metrics server failed to start", err);
+  }
 }
+
+/* -------------------------
+   Main
+-------------------------- */
+
+async function main() {
+  logger.info("Starting gateway...");
+
+  if (!TOKEN) {
+    throw new Error("Missing DISCORD_TOKEN");
+  }
+
+  const shards = await startShards(TOKEN);
+
+  logger.info(`Started ${shards.length} shards`);
+
+  startMetricsLoop(shards);
+
+  await startMetricsServer();
+
+  logger.info("Gateway fully started");
+}
+
+void main();
